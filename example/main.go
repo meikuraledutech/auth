@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/meikuraledutech/auth"
 	"github.com/meikuraledutech/auth/postgres"
-	"github.com/meikuraledutech/auth/zeptomail"
 )
 
 func main() {
@@ -23,14 +22,6 @@ func main() {
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET is not set")
 	}
-	zeptoKey := os.Getenv("ZEPTO_API_KEY")
-	if zeptoKey == "" {
-		log.Fatal("ZEPTO_API_KEY is not set")
-	}
-	fromEmail := os.Getenv("FROM_EMAIL")
-	if fromEmail == "" {
-		fromEmail = "noreply@smart-forms.in"
-	}
 
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
@@ -38,58 +29,53 @@ func main() {
 	}
 	defer pool.Close()
 
-	cfg := auth.DefaultConfig(jwtSecret)
+	cfg := auth.DefaultConfig(jwtSecret, "admin@example.com")
 	var store auth.Store = postgres.New(pool, cfg)
-	var mailer auth.Mailer = zeptomail.New(zeptoKey, fromEmail)
 
-	// 1. Create schema
-	if err := store.CreateSchema(ctx); err != nil {
-		log.Fatalf("schema: %v", err)
+	// 1. Bootstrap (schema + default permissions + super admin)
+	if err := store.Bootstrap(ctx, "admin@example.com"); err != nil {
+		log.Fatalf("bootstrap: %v", err)
 	}
-	fmt.Println("schema created")
 
-	// 2. Create OTP
-	email := "test@example.com"
-	otp, err := store.CreateOTP(ctx, email)
-	if err != nil {
-		log.Fatalf("create otp: %v", err)
+	// 2. Create app-specific permissions
+	store.CreatePermission(ctx, "forms:create", "Can create forms")
+	store.CreatePermission(ctx, "forms:read", "Can view forms")
+	store.CreatePermission(ctx, "forms:delete", "Can delete forms")
+
+	// 3. Create a group
+	group, _ := store.CreateGroup(ctx, "Editor")
+	store.AddPermissionToGroup(ctx, group.ID, "forms:create")
+	store.AddPermissionToGroup(ctx, group.ID, "forms:read")
+	fmt.Printf("Group created: %s (%s)\n", group.Name, group.ID)
+
+	// 4. Create OTP and verify (simulates login)
+	otp, _ := store.CreateOTP(ctx, "user@example.com")
+	user, _ := store.VerifyOTP(ctx, "user@example.com", otp.Code)
+	fmt.Printf("User: %s (%s)\n", user.Email, user.ID)
+
+	// 5. Assign user to group
+	store.AssignUserToGroup(ctx, user.ID, group.ID)
+
+	// 6. Also give a direct permission
+	store.AssignPermission(ctx, user.ID, "forms:delete")
+
+	// 7. Check resolved permissions (group + direct)
+	perms, _ := store.GetResolvedPermissions(ctx, user.ID)
+	fmt.Printf("Resolved permissions (%d):\n", len(perms))
+	for _, p := range perms {
+		fmt.Printf("  - %s\n", p.Key)
 	}
-	fmt.Printf("OTP created: %s (expires: %s)\n", otp.Code, otp.ExpiresAt)
 
-	// 3. Send OTP email
-	if err := mailer.SendOTP(ctx, email, otp.Code, cfg.OTPExpiry); err != nil {
-		log.Fatalf("send otp: %v", err)
-	}
-	fmt.Println("OTP email sent")
+	// 8. Check specific permission
+	has, _ := store.HasResolvedPermission(ctx, user.ID, "forms:create")
+	fmt.Printf("Has forms:create? %v\n", has)
 
-	// 4. Verify OTP (auto-creates user)
-	user, err := store.VerifyOTP(ctx, email, otp.Code)
-	if err != nil {
-		log.Fatalf("verify otp: %v", err)
-	}
-	fmt.Printf("User verified: %s (%s)\n", user.ID, user.Email)
+	has, _ = store.HasResolvedPermission(ctx, user.ID, "billing:manage")
+	fmt.Printf("Has billing:manage? %v\n", has)
 
-	// 5. Generate tokens
-	tokens, err := auth.GenerateTokenPair(cfg, user)
-	if err != nil {
-		log.Fatalf("generate tokens: %v", err)
-	}
-	fmt.Printf("Access token:  %s...\n", tokens.AccessToken[:50])
-	fmt.Printf("Refresh token: %s...\n", tokens.RefreshToken[:50])
+	// 9. Generate tokens
+	tokens, _ := auth.GenerateTokenPair(cfg, user)
+	fmt.Printf("Access token: %s...\n", tokens.AccessToken[:50])
 
-	// 6. Validate access token
-	claims, err := auth.ValidateToken(cfg, tokens.AccessToken)
-	if err != nil {
-		log.Fatalf("validate token: %v", err)
-	}
-	fmt.Printf("Token claims: user_id=%s, email=%s, type=%s\n", claims.UserID, claims.Email, claims.Type)
-
-	// 7. Look up user by ID
-	found, err := store.GetUserByID(ctx, user.ID)
-	if err != nil {
-		log.Fatalf("get user: %v", err)
-	}
-	fmt.Printf("Found user: %s (%s)\n", found.ID, found.Email)
-
-	fmt.Println("\nAll operations completed successfully!")
+	fmt.Println("\nAll operations completed!")
 }

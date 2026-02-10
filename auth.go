@@ -32,22 +32,40 @@ type Claims struct {
 	Type   string `json:"type"` // "access" or "refresh"
 }
 
+// Permission represents a single permission that can be assigned to users or groups.
+type Permission struct {
+	ID          string    `json:"id"`
+	Key         string    `json:"key"`         // e.g. "forms:create"
+	Description string    `json:"description"` // e.g. "Can create forms"
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Group represents a permission group for bulk assignment.
+type Group struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"` // e.g. "Editor"
+	Permissions []Permission `json:"permissions,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+}
+
 // Config holds the configuration for the auth package.
 type Config struct {
-	JWTSecret      string
-	OTPLength      int
-	OTPExpiry      time.Duration
-	AccessExpiry   time.Duration
-	RefreshExpiry  time.Duration
+	JWTSecret       string
+	OTPLength       int
+	OTPExpiry       time.Duration
+	AccessExpiry    time.Duration
+	RefreshExpiry   time.Duration
+	SuperAdminEmail string
 }
 
 // DefaultConfig returns a Config with sensible defaults.
-func DefaultConfig(jwtSecret string) Config {
+func DefaultConfig(jwtSecret string, superAdminEmail string) Config {
 	return Config{
-		JWTSecret:     jwtSecret,
-		OTPLength:     6,
-		OTPExpiry:     5 * time.Minute,
-		AccessExpiry:  15 * time.Minute,
-		RefreshExpiry: 7 * 24 * time.Hour,
+		JWTSecret:       jwtSecret,
+		OTPLength:       6,
+		OTPExpiry:       5 * time.Minute,
+		AccessExpiry:    15 * time.Minute,
+		RefreshExpiry:   7 * 24 * time.Hour,
+		SuperAdminEmail: superAdminEmail,
 	}
 }

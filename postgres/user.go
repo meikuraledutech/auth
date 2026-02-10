@@ -4,8 +4,46 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/meikuraledutech/auth"
 )
+
+// CreateUser creates a new user with the given email.
+func (s *PGStore) CreateUser(ctx context.Context, email string) (*auth.User, error) {
+	user := &auth.User{
+		ID:    uuid.NewString(),
+		Email: email,
+	}
+	_, err := s.db.Exec(ctx,
+		`INSERT INTO auth_users (id, email) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING`,
+		user.ID, user.Email,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("auth: create user: %w", err)
+	}
+	// Re-fetch to get the actual ID (in case of conflict)
+	return s.GetUserByEmail(ctx, email)
+}
+
+// ListUsers returns all users.
+func (s *PGStore) ListUsers(ctx context.Context) ([]auth.User, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT id, email, created_at FROM auth_users ORDER BY created_at`)
+	if err != nil {
+		return nil, fmt.Errorf("auth: list users: %w", err)
+	}
+	defer rows.Close()
+
+	users := []auth.User{}
+	for rows.Next() {
+		var u auth.User
+		if err := rows.Scan(&u.ID, &u.Email, &u.CreatedAt); err != nil {
+			return nil, fmt.Errorf("auth: scan user: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
 
 // GetUserByID fetches a user by their ID.
 // Returns nil, nil if not found.
