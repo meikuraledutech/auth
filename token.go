@@ -7,14 +7,14 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// GenerateTokenPair creates a signed access token and refresh token for the given user with embedded permissions.
-func GenerateTokenPair(cfg Config, user *User, permissions []string) (*TokenPair, error) {
-	accessToken, err := signToken(cfg.JWTSecret, user, "access", permissions, cfg.AccessExpiry)
+// GenerateTokenPair creates a signed access token and refresh token for the given user with embedded permissions and groups.
+func GenerateTokenPair(cfg Config, user *User, permissions []string, groups []string) (*TokenPair, error) {
+	accessToken, err := signToken(cfg.JWTSecret, user, "access", permissions, groups, cfg.AccessExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("auth: sign access token: %w", err)
 	}
 
-	refreshToken, err := signToken(cfg.JWTSecret, user, "refresh", nil, cfg.RefreshExpiry)
+	refreshToken, err := signToken(cfg.JWTSecret, user, "refresh", nil, nil, cfg.RefreshExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("auth: sign refresh token: %w", err)
 	}
@@ -56,10 +56,18 @@ func ValidateToken(cfg Config, tokenStr string) (*Claims, error) {
 		}
 	}
 
+	// Extract groups if present (only in access tokens)
+	if grps, ok := mapClaims["groups"].([]interface{}); ok {
+		claims.Groups = make([]string, len(grps))
+		for i, g := range grps {
+			claims.Groups[i] = g.(string)
+		}
+	}
+
 	return claims, nil
 }
 
-func signToken(secret string, user *User, tokenType string, permissions []string, expiry time.Duration) (string, error) {
+func signToken(secret string, user *User, tokenType string, permissions []string, groups []string, expiry time.Duration) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
 		"email":   user.Email,
@@ -68,9 +76,14 @@ func signToken(secret string, user *User, tokenType string, permissions []string
 		"exp":     time.Now().Add(expiry).Unix(),
 	}
 
-	// Only embed permissions in access tokens
-	if tokenType == "access" && permissions != nil {
-		claims["permissions"] = permissions
+	// Only embed permissions and groups in access tokens
+	if tokenType == "access" {
+		if permissions != nil {
+			claims["permissions"] = permissions
+		}
+		if groups != nil {
+			claims["groups"] = groups
+		}
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

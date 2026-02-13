@@ -31,6 +31,7 @@ type Claims struct {
 	Email       string   `json:"email"`
 	Type        string   `json:"type"` // "access" or "refresh"
 	Permissions []string `json:"permissions,omitempty"`
+	Groups      []string `json:"groups,omitempty"` // group names
 }
 
 // Permission represents a single permission that can be assigned to users or groups.

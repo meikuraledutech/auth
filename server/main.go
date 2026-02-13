@@ -191,7 +191,18 @@ func handleVerifyOTP(c fiber.Ctx) error {
 		permKeys[i] = p.Key
 	}
 
-	tokens, err := auth.GenerateTokenPair(cfg, user, permKeys)
+	// Get user groups to embed in token
+	groups, err := store.GetUserGroups(c.Context(), user.ID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	groupNames := make([]string, len(groups))
+	for i, g := range groups {
+		groupNames[i] = g.Name
+	}
+
+	tokens, err := auth.GenerateTokenPair(cfg, user, permKeys, groupNames)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -201,6 +212,7 @@ func handleVerifyOTP(c fiber.Ctx) error {
 		"refresh_token": tokens.RefreshToken,
 		"user":          user,
 		"permissions":   permKeys,
+		"groups":        groupNames,
 	})
 }
 
@@ -236,7 +248,18 @@ func handleRefresh(c fiber.Ctx) error {
 		permKeys[i] = p.Key
 	}
 
-	tokens, err := auth.GenerateTokenPair(cfg, user, permKeys)
+	// Get fresh groups from DB (in case they changed)
+	groups, err := store.GetUserGroups(c.Context(), user.ID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	groupNames := make([]string, len(groups))
+	for i, g := range groups {
+		groupNames[i] = g.Name
+	}
+
+	tokens, err := auth.GenerateTokenPair(cfg, user, permKeys, groupNames)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -245,6 +268,7 @@ func handleRefresh(c fiber.Ctx) error {
 		"access_token":  tokens.AccessToken,
 		"refresh_token": tokens.RefreshToken,
 		"permissions":   permKeys,
+		"groups":        groupNames,
 	})
 }
 
@@ -262,6 +286,7 @@ func handleMe(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"user":        user,
 		"permissions": claims.Permissions,
+		"groups":      claims.Groups,
 	})
 }
 

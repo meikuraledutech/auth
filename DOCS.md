@@ -112,15 +112,15 @@ Implement this to use any email provider.
 
 ```go
 // Creates access token (short-lived) + refresh token (long-lived)
-// Permissions are embedded in the access token for zero-DB-query authorization
-auth.GenerateTokenPair(cfg, user, permissions) (*TokenPair, error)
+// Permissions and groups are embedded in the access token for zero-DB-query authorization
+auth.GenerateTokenPair(cfg, user, permissions, groups) (*TokenPair, error)
 
 // Parses and validates JWT, returns claims
-// For access tokens, claims.Permissions contains the embedded permission keys
+// For access tokens, claims.Permissions and claims.Groups contain the embedded data
 auth.ValidateToken(cfg, tokenStr) (*Claims, error)
 ```
 
-Both use HMAC-SHA256 signing. Permissions are only embedded in access tokens (not refresh tokens).
+Both use HMAC-SHA256 signing. Permissions and groups are only embedded in access tokens (not refresh tokens).
 
 ## Types
 
@@ -134,7 +134,7 @@ Both use HMAC-SHA256 signing. Permissions are only embedded in access tokens (no
 
 **TokenPair** — `AccessToken`, `RefreshToken`
 
-**Claims** — `UserID`, `Email`, `Type` (`"access"` or `"refresh"`), `Permissions` (permission keys, only in access tokens)
+**Claims** — `UserID`, `Email`, `Type` (`"access"` or `"refresh"`), `Permissions` (permission keys, only in access tokens), `Groups` (group names, only in access tokens)
 
 **Config** — `JWTSecret`, `OTPLength` (6), `OTPExpiry` (5m), `AccessExpiry` (15m), `RefreshExpiry` (7d), `SuperAdminEmail`
 

@@ -102,17 +102,25 @@ group, _ := store.CreateGroup(ctx, "Editor")
 store.AddPermissionToGroup(ctx, group.ID, "forms:create")
 store.AssignUserToGroup(ctx, user.ID, group.ID)
 
-// JWT tokens with embedded permissions
+// JWT tokens with embedded permissions and groups
 perms, _ := store.GetResolvedPermissions(ctx, user.ID)
 permKeys := []string{}
 for _, p := range perms {
     permKeys = append(permKeys, p.Key)
 }
-tokens, _ := auth.GenerateTokenPair(cfg, user, permKeys)
 
-// Validate token (permissions are embedded)
+groups, _ := store.GetUserGroups(ctx, user.ID)
+groupNames := []string{}
+for _, g := range groups {
+    groupNames = append(groupNames, g.Name)
+}
+
+tokens, _ := auth.GenerateTokenPair(cfg, user, permKeys, groupNames)
+
+// Validate token (permissions and groups are embedded)
 claims, _ := auth.ValidateToken(cfg, tokens.AccessToken)
 // claims.Permissions = ["forms:create", ...]
+// claims.Groups = ["Editor", ...]
 ```
 
 ## Structs
@@ -148,6 +156,7 @@ type Claims struct {
     Email       string   `json:"email"`
     Type        string   `json:"type"` // "access" or "refresh"
     Permissions []string `json:"permissions,omitempty"` // embedded in access token
+    Groups      []string `json:"groups,omitempty"`      // group names, embedded in access token
 }
 ```
 
