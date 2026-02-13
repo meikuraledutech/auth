@@ -27,9 +27,10 @@ type TokenPair struct {
 
 // Claims represents the JWT token claims.
 type Claims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
-	Type   string `json:"type"` // "access" or "refresh"
+	UserID      string   `json:"user_id"`
+	Email       string   `json:"email"`
+	Type        string   `json:"type"` // "access" or "refresh"
+	Permissions []string `json:"permissions,omitempty"`
 }
 
 // Permission represents a single permission that can be assigned to users or groups.

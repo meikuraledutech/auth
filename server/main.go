@@ -108,7 +108,7 @@ func extractUser(c fiber.Ctx) (*auth.Claims, error) {
 	return claims, nil
 }
 
-// requirePermission wraps a handler with auth + permission check.
+// requirePermission wraps a handler with auth + permission check (from JWT).
 func requirePermission(permKey string, handler fiber.Handler) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		claims, err := extractUser(c)
@@ -116,17 +116,23 @@ func requirePermission(permKey string, handler fiber.Handler) fiber.Handler {
 			return c.Status(401).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		has, err := store.HasResolvedPermission(c.Context(), claims.UserID, permKey)
-		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
-		if !has {
+		// Check permissions from JWT (no DB call)
+		if !contains(claims.Permissions, permKey) {
 			return c.Status(403).JSON(fiber.Map{"error": "forbidden: requires " + permKey})
 		}
 
 		c.Locals("claims", claims)
 		return handler(c)
 	}
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // ─── Auth Handlers ──────────────────────────────────────────
@@ -174,7 +180,18 @@ func handleVerifyOTP(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	tokens, err := auth.GenerateTokenPair(cfg, user)
+	// Get resolved permissions to embed in token
+	perms, err := store.GetResolvedPermissions(c.Context(), user.ID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	permKeys := make([]string, len(perms))
+	for i, p := range perms {
+		permKeys[i] = p.Key
+	}
+
+	tokens, err := auth.GenerateTokenPair(cfg, user, permKeys)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -183,6 +200,7 @@ func handleVerifyOTP(c fiber.Ctx) error {
 		"access_token":  tokens.AccessToken,
 		"refresh_token": tokens.RefreshToken,
 		"user":          user,
+		"permissions":   permKeys,
 	})
 }
 
@@ -207,7 +225,18 @@ func handleRefresh(c fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": "user not found"})
 	}
 
-	tokens, err := auth.GenerateTokenPair(cfg, user)
+	// Get fresh permissions from DB (in case they changed)
+	perms, err := store.GetResolvedPermissions(c.Context(), user.ID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	permKeys := make([]string, len(perms))
+	for i, p := range perms {
+		permKeys[i] = p.Key
+	}
+
+	tokens, err := auth.GenerateTokenPair(cfg, user, permKeys)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -215,6 +244,7 @@ func handleRefresh(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"access_token":  tokens.AccessToken,
 		"refresh_token": tokens.RefreshToken,
+		"permissions":   permKeys,
 	})
 }
 
@@ -229,7 +259,10 @@ func handleMe(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "user not found"})
 	}
 
-	return c.JSON(user)
+	return c.JSON(fiber.Map{
+		"user":        user,
+		"permissions": claims.Permissions,
+	})
 }
 
 func handleMyPermissions(c fiber.Ctx) error {
@@ -238,12 +271,7 @@ func handleMyPermissions(c fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	perms, err := store.GetResolvedPermissions(c.Context(), claims.UserID)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	return c.JSON(perms)
+	return c.JSON(claims.Permissions)
 }
 
 // ─── Permission Handlers ────────────────────────────────────

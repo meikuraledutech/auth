@@ -73,9 +73,20 @@ func main() {
 	has, _ = store.HasResolvedPermission(ctx, user.ID, "billing:manage")
 	fmt.Printf("Has billing:manage? %v\n", has)
 
-	// 9. Generate tokens
-	tokens, _ := auth.GenerateTokenPair(cfg, user)
+	// 9. Generate tokens with permissions
+	permKeys := make([]string, len(perms))
+	for i, p := range perms {
+		permKeys[i] = p.Key
+	}
+	tokens, _ := auth.GenerateTokenPair(cfg, user, permKeys)
 	fmt.Printf("Access token: %s...\n", tokens.AccessToken[:50])
+
+	// 10. Validate and check permissions from token
+	claims, _ := auth.ValidateToken(cfg, tokens.AccessToken)
+	fmt.Printf("Permissions in token (%d):\n", len(claims.Permissions))
+	for _, p := range claims.Permissions {
+		fmt.Printf("  - %s\n", p)
+	}
 
 	fmt.Println("\nAll operations completed!")
 }
