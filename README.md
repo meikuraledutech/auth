@@ -93,19 +93,26 @@ otp, _ := store.CreateOTP(ctx, "user@example.com")
 mailer.SendOTP(ctx, "user@example.com", otp.Code, cfg.OTPExpiry)
 user, _ := store.VerifyOTP(ctx, "user@example.com", otp.Code)
 
-// JWT tokens
-tokens, _ := auth.GenerateTokenPair(cfg, user)
-claims, _ := auth.ValidateToken(cfg, tokens.AccessToken)
-
 // Permissions
 store.CreatePermission(ctx, "forms:create", "Can create forms")
 store.AssignPermission(ctx, user.ID, "forms:create")
-has, _ := store.HasResolvedPermission(ctx, user.ID, "forms:create") // true
 
 // Groups
 group, _ := store.CreateGroup(ctx, "Editor")
 store.AddPermissionToGroup(ctx, group.ID, "forms:create")
 store.AssignUserToGroup(ctx, user.ID, group.ID)
+
+// JWT tokens with embedded permissions
+perms, _ := store.GetResolvedPermissions(ctx, user.ID)
+permKeys := []string{}
+for _, p := range perms {
+    permKeys = append(permKeys, p.Key)
+}
+tokens, _ := auth.GenerateTokenPair(cfg, user, permKeys)
+
+// Validate token (permissions are embedded)
+claims, _ := auth.ValidateToken(cfg, tokens.AccessToken)
+// claims.Permissions = ["forms:create", ...]
 ```
 
 ## Structs
@@ -137,9 +144,10 @@ type TokenPair struct {
 }
 
 type Claims struct {
-    UserID string `json:"user_id"`
-    Email  string `json:"email"`
-    Type   string `json:"type"` // "access" or "refresh"
+    UserID      string   `json:"user_id"`
+    Email       string   `json:"email"`
+    Type        string   `json:"type"` // "access" or "refresh"
+    Permissions []string `json:"permissions,omitempty"` // embedded in access token
 }
 ```
 

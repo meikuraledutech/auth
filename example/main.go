@@ -43,7 +43,10 @@ func main() {
 	store.CreatePermission(ctx, "forms:delete", "Can delete forms")
 
 	// 3. Create a group
-	group, _ := store.CreateGroup(ctx, "Editor")
+	group, err := store.CreateGroup(ctx, "Editor")
+	if err != nil {
+		log.Fatalf("create group: %v", err)
+	}
 	store.AddPermissionToGroup(ctx, group.ID, "forms:create")
 	store.AddPermissionToGroup(ctx, group.ID, "forms:read")
 	fmt.Printf("Group created: %s (%s)\n", group.Name, group.ID)
