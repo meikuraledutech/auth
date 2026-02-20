@@ -50,6 +50,14 @@ type Group struct {
 	CreatedAt   time.Time    `json:"created_at"`
 }
 
+// MigrationRecord represents an applied database migration.
+type MigrationRecord struct {
+	Name      string
+	Applied   bool
+	AppliedAt *time.Time
+	Checksum  string
+}
+
 // Config holds the configuration for the auth package.
 type Config struct {
 	JWTSecret       string
@@ -58,6 +66,7 @@ type Config struct {
 	AccessExpiry    time.Duration
 	RefreshExpiry   time.Duration
 	SuperAdminEmail string
+	AutoMigrate     bool // if true, Bootstrap() runs migrations automatically
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -69,5 +78,6 @@ func DefaultConfig(jwtSecret string, superAdminEmail string) Config {
 		AccessExpiry:    15 * time.Minute,
 		RefreshExpiry:   7 * 24 * time.Hour,
 		SuperAdminEmail: superAdminEmail,
+		AutoMigrate:     true,
 	}
 }

@@ -19,11 +19,19 @@ var defaultPermissions = []struct {
 // Bootstrap creates the schema, seeds default permissions, and ensures the super admin
 // user exists with all permissions. Safe to call on every server start (idempotent).
 func (s *PGStore) Bootstrap(ctx context.Context, superAdminEmail string) error {
-	// 1. Create schema.
-	if err := s.CreateSchema(ctx); err != nil {
-		return fmt.Errorf("auth: bootstrap schema: %w", err)
+	// 1. Run migrations if AutoMigrate is enabled.
+	if s.cfg.AutoMigrate {
+		if err := s.Migrate(ctx); err != nil {
+			return fmt.Errorf("auth: bootstrap migrate: %w", err)
+		}
+		log.Println("auth: migrations applied")
+	} else {
+		// If not auto-migrating, caller must have called Migrate() already.
+		// But we still ensure the migrations table exists so subsequent code works.
+		if err := s.ensureMigrationsTable(ctx); err != nil {
+			return fmt.Errorf("auth: bootstrap ensure migrations table: %w", err)
+		}
 	}
-	log.Println("auth: schema ready")
 
 	// 2. Seed default permissions.
 	for _, dp := range defaultPermissions {

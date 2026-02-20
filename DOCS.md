@@ -16,12 +16,12 @@ auth/example      — example programmatic usage
 
 ## Store Interface
 
-28 methods across 8 groups.
+28 methods across 8 groups. Schema is managed via migrations (see Migrator interface below).
 
 ```go
 type Store interface {
-    // Schema
-    CreateSchema(ctx context.Context) error
+    // Schema (deprecated: use Migrator instead)
+    CreateSchema(ctx context.Context) error  // now delegates to Migrate()
     DropSchema(ctx context.Context) error
 
     // OTP
@@ -96,7 +96,27 @@ type Store interface {
 
 **HasResolvedPermission** — Checks both direct and group permissions. **Use this for authorization checks.**
 
-**Bootstrap** — Creates schema, seeds default permissions (`permissions:manage`, `groups:manage`, `users:manage`), ensures super admin user exists with all permissions. Idempotent, safe on every server start.
+**Bootstrap** — Runs migrations (if `Config.AutoMigrate` is true), seeds default permissions (`permissions:manage`, `groups:manage`, `users:manage`), ensures super admin user exists with all permissions. Idempotent, safe on every server start.
+
+## Migrator Interface
+
+```go
+type Migrator interface {
+    Migrate(ctx context.Context) error
+    Rollback(ctx context.Context) error
+    MigrationStatus(ctx context.Context) ([]MigrationRecord, error)
+}
+```
+
+The PostgreSQL Store implements `Migrator`. Migrations are versioned SQL files in `postgres/migrations/`, tracked in the `auth_migrations` table with checksums for integrity. **Use Migrate()** to apply schema changes.
+
+### Migration Methods
+
+**Migrate** — Applies all pending migrations in order. Each migration runs in its own transaction. Verifies checksums of already-applied migrations for integrity. Safe to call multiple times.
+
+**Rollback** — Rolls back the last applied migration (down SQL file). Removes the migration record from tracking.
+
+**MigrationStatus** — Returns all migrations with their applied status, applied timestamp, and checksum.
 
 ## Mailer Interface
 
@@ -136,7 +156,9 @@ Both use HMAC-SHA256 signing. Permissions and groups are only embedded in access
 
 **Claims** — `UserID`, `Email`, `Type` (`"access"` or `"refresh"`), `Permissions` (permission keys, only in access tokens), `Groups` (group names, only in access tokens)
 
-**Config** — `JWTSecret`, `OTPLength` (6), `OTPExpiry` (5m), `AccessExpiry` (15m), `RefreshExpiry` (7d), `SuperAdminEmail`
+**MigrationRecord** — `Name`, `Applied`, `AppliedAt`, `Checksum`
+
+**Config** — `JWTSecret`, `OTPLength` (6), `OTPExpiry` (5m), `AccessExpiry` (15m), `RefreshExpiry` (7d), `SuperAdminEmail`, `AutoMigrate` (true by default)
 
 ## Errors
 
@@ -152,9 +174,9 @@ Both use HMAC-SHA256 signing. Permissions and groups are only embedded in access
 
 ## Database Schema
 
-7 tables: `auth_users`, `auth_otps`, `auth_permissions`, `auth_user_permissions`, `auth_groups`, `auth_group_permissions`, `auth_user_groups`.
+8 tables: `auth_users`, `auth_otps`, `auth_permissions`, `auth_user_permissions`, `auth_groups`, `auth_group_permissions`, `auth_user_groups`, `auth_migrations`.
 
-Foreign keys with cascade deletes. Indexes on all lookup columns.
+The `auth_migrations` table tracks applied migrations by name and checksum. Foreign keys with cascade deletes on user/group tables. Indexes on all lookup columns.
 
 ## Permission Model
 
@@ -166,11 +188,13 @@ Resolved permissions = direct + inherited from groups. Always check with `HasRes
 
 On app start, call `store.Bootstrap(ctx, superAdminEmail)`:
 
-1. Creates all tables
-2. Seeds 3 default permissions
+1. Runs migrations (if `Config.AutoMigrate` is true, which is the default)
+2. Seeds 3 default permissions (`permissions:manage`, `groups:manage`, `users:manage`)
 3. Creates super admin user with all permissions
 
 Super admin logs in via OTP like everyone else — they just have all permissions pre-assigned.
+
+**Migration Control**: Set `Config.AutoMigrate = false` if you want to manage migrations separately (call `store.Migrate(ctx)` manually before `Bootstrap`).
 
 ## Implementations
 

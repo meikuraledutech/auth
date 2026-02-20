@@ -63,3 +63,15 @@ type Store interface {
 	// Bootstrap
 	Bootstrap(ctx context.Context, superAdminEmail string) error
 }
+
+// Migrator defines the contract for managing database migrations.
+type Migrator interface {
+	// Migrate applies all pending migrations in order.
+	Migrate(ctx context.Context) error
+
+	// Rollback rolls back the last applied migration.
+	Rollback(ctx context.Context) error
+
+	// MigrationStatus returns all migrations with their applied status.
+	MigrationStatus(ctx context.Context) ([]MigrationRecord, error)
+}
