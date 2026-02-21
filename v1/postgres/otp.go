@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/meikuraledutech/auth"
+	"github.com/meikuraledutech/auth/v1"
 )
 
 // CreateOTP generates a random OTP code for the given email and stores it.

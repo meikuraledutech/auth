@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	auth "github.com/meikuraledutech/auth"
+	auth "github.com/meikuraledutech/auth/v1"
 )
 
 //go:embed migrations/*.sql

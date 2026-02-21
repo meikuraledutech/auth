@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/meikuraledutech/auth"
+	"github.com/meikuraledutech/auth/v1"
 )
 
 // CreatePermission creates a new permission with the given key and description.

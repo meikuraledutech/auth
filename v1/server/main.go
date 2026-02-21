@@ -9,9 +9,9 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/meikuraledutech/auth"
-	"github.com/meikuraledutech/auth/postgres"
-	"github.com/meikuraledutech/auth/zeptomail"
+	"github.com/meikuraledutech/auth/v1"
+	"github.com/meikuraledutech/auth/v1/postgres"
+	"github.com/meikuraledutech/auth/v1/zeptomail"
 )
 
 var (

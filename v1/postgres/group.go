@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/meikuraledutech/auth"
+	"github.com/meikuraledutech/auth/v1"
 )
 
 // CreateGroup creates a new permission group.

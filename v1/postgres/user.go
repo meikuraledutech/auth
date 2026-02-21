@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/meikuraledutech/auth"
+	"github.com/meikuraledutech/auth/v1"
 )
 
 // CreateUser creates a new user with the given email.

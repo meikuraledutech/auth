@@ -2,7 +2,7 @@ package postgres
 
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/meikuraledutech/auth"
+	"github.com/meikuraledutech/auth/v1"
 )
 
 // PGStore implements auth.Store using PostgreSQL via pgx.
