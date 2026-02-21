@@ -20,7 +20,14 @@ func main() {
 	}
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		log.Fatal("JWT_SECRET is not set")
+		log.Println("⚠ JWT_SECRET not set, using default for testing")
+		jwtSecret = "test-secret-for-example"
+	}
+
+	// If TEST_CLOUD_DB=1, run cloud database migration tests
+	if os.Getenv("TEST_CLOUD_DB") == "1" {
+		testCloudDB()
+		return
 	}
 
 	pool, err := pgxpool.New(ctx, dbURL)
@@ -30,11 +37,26 @@ func main() {
 	defer pool.Close()
 
 	cfg := auth.DefaultConfig(jwtSecret, "admin@example.com")
-	var store auth.Store = postgres.New(pool, cfg)
+	store := postgres.New(pool, cfg)
 
-	// 1. Bootstrap (schema + default permissions + super admin)
+	// 1. Bootstrap (runs migrations automatically if AutoMigrate is true)
 	if err := store.Bootstrap(ctx, "admin@example.com"); err != nil {
 		log.Fatalf("bootstrap: %v", err)
+	}
+	fmt.Println("✓ Bootstrap complete (migrations applied)")
+
+	// 1b. Check migration status
+	migrations, err := store.MigrationStatus(ctx)
+	if err != nil {
+		log.Fatalf("migration status: %v", err)
+	}
+	fmt.Printf("✓ Applied migrations (%d):\n", len(migrations))
+	for _, m := range migrations {
+		status := "⏳ pending"
+		if m.Applied {
+			status = "✓ applied"
+		}
+		fmt.Printf("  - %s: %s\n", m.Name, status)
 	}
 
 	// 2. Create app-specific permissions
