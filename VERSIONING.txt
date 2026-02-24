@@ -2,55 +2,53 @@ AUTH PACKAGE VERSIONING RULES
 ==============================
 
 Project Structure:
-- Main module: github.com/meikuraledutech/auth
-- V1 submodule: github.com/meikuraledutech/auth/v1
-- V2 submodule: github.com/meikuraledutech/auth/v2
+- V1 (root module): github.com/meikuraledutech/auth        → lives at repo root /
+- V2 (submodule):   github.com/meikuraledutech/auth/v2     → lives at /v2
+
+IMPORTANT Go Rule:
+==================
+Module paths ending with /v0 or /v1 are INVALID in Go's module system.
+Only /v2 and above are accepted as major version suffixes.
+- WRONG: module github.com/meikuraledutech/auth/v1   ← rejected by Go
+- RIGHT: module github.com/meikuraledutech/auth       ← v1 is always the root
 
 Git Tag Format:
 ===============
 
-For the main module (root):
+For v1 (root module):
   Format: vX.Y.Z
-  Examples: v1.0.0, v1.1.0, v1.2.1
+  Examples: v1.0.0, v1.1.0, v1.1.1, v1.2.0
 
-For v1 submodule (/v1):
-  Format: v1/vX.Y.Z
-  Examples: v1/v1.0.0, v1/v1.1.0, v1/v1.2.1
+For v2 submodule (/v2 directory):
+  Format: v2/v2.X.Y
+  Examples: v2/v2.0.0, v2/v2.1.0, v2/v2.1.1
 
-For v2 submodule (/v2):
-  Format: v2/vX.Y.Z
-  Examples: v2/v1.0.0, v2/v1.1.0, v2/v1.2.1
+Requirements:
+=============
 
-Requirements for Submodules:
-============================
-
-1. Each submodule (v1/, v2/) MUST have its own go.mod file
-2. go.mod module name must match: module github.com/meikuraledutech/auth/{version}
-3. Each submodule must maintain its own dependencies in go.mod
-4. Tags must follow the format above for Go to properly resolve versions
+1. v1 has NO separate go.mod — it IS the root module (go.mod at repo root)
+2. v2/ directory MUST have its own go.mod with: module github.com/meikuraledutech/auth/v2
+3. v2 version tags must start with v2.x.x (major version must match path suffix)
+4. Each submodule (v3+) follows the same pattern as v2
 
 Example Git Commands:
 =====================
 
-Tag v1 submodule:
-  git tag v1/v1.0.0
-  git push origin v1/v1.0.0
+Tag v1 (root module):
+  git tag v1.2.0
+  git push origin v1.2.0
 
 Tag v2 submodule:
-  git tag v2/v1.0.0
-  git push origin v2/v1.0.0
+  git tag v2/v2.0.0
+  git push origin v2/v2.0.0
 
-Tag main module:
-  git tag v1.0.0
-  git push origin v1.0.0
+Importing:
+==========
 
-Importing Submodules:
-=====================
+V1 (root module):
+  go get github.com/meikuraledutech/auth@v1.2.0
+  import "github.com/meikuraledutech/auth"
 
-In go.mod of consuming projects:
-  require github.com/meikuraledutech/auth/v1 v1.0.0
-  require github.com/meikuraledutech/auth/v2 v1.0.0
-
-In code:
-  import "github.com/meikuraledutech/auth/v1"
+V2 submodule:
+  go get github.com/meikuraledutech/auth/v2@v2.0.0
   import "github.com/meikuraledutech/auth/v2"
