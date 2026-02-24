@@ -1,0 +1,56 @@
+AUTH PACKAGE VERSIONING RULES
+==============================
+
+Project Structure:
+- Main module: github.com/meikuraledutech/auth
+- V1 submodule: github.com/meikuraledutech/auth/v1
+- V2 submodule: github.com/meikuraledutech/auth/v2
+
+Git Tag Format:
+===============
+
+For the main module (root):
+  Format: vX.Y.Z
+  Examples: v1.0.0, v1.1.0, v1.2.1
+
+For v1 submodule (/v1):
+  Format: v1/vX.Y.Z
+  Examples: v1/v1.0.0, v1/v1.1.0, v1/v1.2.1
+
+For v2 submodule (/v2):
+  Format: v2/vX.Y.Z
+  Examples: v2/v1.0.0, v2/v1.1.0, v2/v1.2.1
+
+Requirements for Submodules:
+============================
+
+1. Each submodule (v1/, v2/) MUST have its own go.mod file
+2. go.mod module name must match: module github.com/meikuraledutech/auth/{version}
+3. Each submodule must maintain its own dependencies in go.mod
+4. Tags must follow the format above for Go to properly resolve versions
+
+Example Git Commands:
+=====================
+
+Tag v1 submodule:
+  git tag v1/v1.0.0
+  git push origin v1/v1.0.0
+
+Tag v2 submodule:
+  git tag v2/v1.0.0
+  git push origin v2/v1.0.0
+
+Tag main module:
+  git tag v1.0.0
+  git push origin v1.0.0
+
+Importing Submodules:
+=====================
+
+In go.mod of consuming projects:
+  require github.com/meikuraledutech/auth/v1 v1.0.0
+  require github.com/meikuraledutech/auth/v2 v1.0.0
+
+In code:
+  import "github.com/meikuraledutech/auth/v1"
+  import "github.com/meikuraledutech/auth/v2"
