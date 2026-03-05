@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/meikuraledutech/auth/v2 v2.0.1
+	github.com/meikuraledutech/auth/v2 v2.0.2
 )
 
 require (
