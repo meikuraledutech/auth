@@ -52,3 +52,54 @@ V1 (root module):
 V2 submodule:
   go get github.com/meikuraledutech/auth/v2@v2.0.0
   import "github.com/meikuraledutech/auth/v2"
+
+⚠️ CRITICAL: go.mod replace Directive Rule:
+==========================================
+
+DO NOT include 'replace' directives in go.mod files that will be released/tagged!
+
+❌ WRONG (in v2/examples/go.mod):
+  replace github.com/meikuraledutech/auth/v2 => ../
+
+  This breaks the Go module proxy because:
+  1. The proxy downloads the code as a released module
+  2. The replace directive references "../" which doesn't exist in the downloaded module
+  3. Users get: "module X found (vX.Y.Z), but does not contain package Y"
+
+✅ RIGHT (for released code):
+  - Remove ALL replace directives before tagging
+  - Ensure all require statements reference released versions
+  - Use replace directives ONLY for LOCAL DEVELOPMENT, comment them out before release
+
+  Example v2/examples/go.mod (for release):
+  ```
+  require (
+    github.com/meikuraledutech/auth/v2 v2.0.0
+  )
+  // NO replace directive here!
+  ```
+
+  Example v2/examples/go.mod (for local development only):
+  ```
+  require (
+    github.com/meikuraledutech/auth/v2 v2.0.0
+  )
+  replace github.com/meikuraledutech/auth/v2 => ../
+  ```
+
+Pre-Release Checklist:
+======================
+Before creating a version tag:
+  ☐ Review all go.mod files (especially examples/)
+  ☐ Remove/comment out ALL replace directives
+  ☐ Update all version references to match the new tag
+  ☐ Verify no local-only configurations are in the code
+  ☐ Test the build without replace directives
+  ☐ Then create and push the tag
+  ☐ Allow 5-30 minutes for Go module proxy to index
+
+History:
+========
+- v2.0.0: Failed - had replace directive in examples/go.mod
+- v2.0.1: Failed - pseudo-version created by proxy, incorrect go.mod
+- v2.0.2: SUCCESS - replace directive removed, versions updated
