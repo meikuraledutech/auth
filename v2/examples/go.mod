@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/meikuraledutech/auth/v2 v2.0.0
+	github.com/meikuraledutech/auth/v2 v2.0.1
 )
 
 require (
@@ -17,5 +17,3 @@ require (
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )
-
-replace github.com/meikuraledutech/auth/v2 => ../
