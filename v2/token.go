@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -23,6 +24,50 @@ func GenerateTokenPair(cfg Config, user *User, permissions []string, groups []st
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
+}
+
+// RefreshTokenPair validates a refresh token and issues a new token pair.
+// Fetches the latest user data and permissions from the store.
+// Returns ErrUserNotFound if the user no longer exists.
+func RefreshTokenPair(ctx context.Context, cfg Config, store Store, refreshToken string) (*TokenPair, error) {
+	claims, err := ValidateToken(cfg, refreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	if claims.Type != "refresh" {
+		return nil, fmt.Errorf("auth: token is not a refresh token")
+	}
+
+	user, err := store.GetUserByID(ctx, claims.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	perms, err := store.GetResolvedPermissions(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	permKeys := make([]string, len(perms))
+	for i, p := range perms {
+		permKeys[i] = p.Key
+	}
+
+	groups, err := store.GetUserGroups(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	groupNames := make([]string, len(groups))
+	for i, g := range groups {
+		groupNames[i] = g.Name
+	}
+
+	return GenerateTokenPair(cfg, user, permKeys, groupNames)
 }
 
 // ValidateToken parses and validates a JWT token, returning the claims.

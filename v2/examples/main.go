@@ -179,6 +179,15 @@ func main() {
 	fmt.Printf("   ✓ Access token:  %s...\n", tokens.AccessToken[:50])
 	fmt.Printf("   ✓ Refresh token: %s...\n\n", tokens.RefreshToken[:50])
 
+	// 8: Refresh token pair
+	fmt.Println("8. Refreshing token pair...")
+	newTokens, err := auth.RefreshTokenPair(ctx, cfg, store, tokens.RefreshToken)
+	if err != nil {
+		log.Fatalf("RefreshTokenPair failed: %v", err)
+	}
+	fmt.Printf("   ✓ New access token:  %s...\n", newTokens.AccessToken[:50])
+	fmt.Printf("   ✓ New refresh token: %s...\n\n", newTokens.RefreshToken[:50])
+
 	fmt.Println("=== All tests passed! ===")
 	fmt.Printf("\nOTP code: %s (sent to %s)\n", otp.Code, testEmail)
 }
