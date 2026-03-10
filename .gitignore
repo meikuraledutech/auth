@@ -7,3 +7,6 @@
 *.test
 *.out
 vendor/
+v2/examples/example
+v2/examples/test-auth
+v2/examples/mailtest/mailtest
