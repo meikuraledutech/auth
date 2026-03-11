@@ -170,14 +170,24 @@ func main() {
 	fmt.Printf("   ✓ Reset token created, expires: %s\n", expiresAt.Format("2006-01-02 15:04:05"))
 	fmt.Printf("   ✓ Token: %s...\n\n", resetToken[:20])
 
-	// 7: Generate JWT token pair
-	fmt.Println("7. Generating JWT token pair...")
-	tokens, err := auth.GenerateTokenPair(cfg, user, []string{}, []string{})
+	// 7: Generate JWT token pair with custom meta claims
+	fmt.Println("7. Generating JWT token pair with meta claims...")
+	tokens, err := auth.GenerateTokenPair(cfg, user, []string{}, []string{}, map[string]any{
+		"college_id": "clg_abc123",
+		"role":       "college_admin",
+	})
 	if err != nil {
 		log.Fatalf("GenerateTokenPair failed: %v", err)
 	}
 	fmt.Printf("   ✓ Access token:  %s...\n", tokens.AccessToken[:50])
-	fmt.Printf("   ✓ Refresh token: %s...\n\n", tokens.RefreshToken[:50])
+	fmt.Printf("   ✓ Refresh token: %s...\n", tokens.RefreshToken[:50])
+
+	// Validate and check meta is present
+	claims, err := auth.ValidateToken(cfg, tokens.AccessToken)
+	if err != nil {
+		log.Fatalf("ValidateToken failed: %v", err)
+	}
+	fmt.Printf("   ✓ Meta from token: %v\n\n", claims.Meta)
 
 	// 8: Refresh token pair
 	fmt.Println("8. Refreshing token pair...")

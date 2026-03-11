@@ -8,14 +8,15 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// GenerateTokenPair creates a signed access token and refresh token for the given user with embedded permissions and groups.
-func GenerateTokenPair(cfg Config, user *User, permissions []string, groups []string) (*TokenPair, error) {
-	accessToken, err := signToken(cfg.JWTSecret, user, "access", permissions, groups, cfg.AccessExpiry)
+// GenerateTokenPair creates a signed access token and refresh token for the given user.
+// meta is optional — pass nil or a map of custom claims to embed in the access token (e.g. {"college_id": "xyz"}).
+func GenerateTokenPair(cfg Config, user *User, permissions []string, groups []string, meta map[string]any) (*TokenPair, error) {
+	accessToken, err := signToken(cfg.JWTSecret, user, "access", permissions, groups, meta, cfg.AccessExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("auth: sign access token: %w", err)
 	}
 
-	refreshToken, err := signToken(cfg.JWTSecret, user, "refresh", nil, nil, cfg.RefreshExpiry)
+	refreshToken, err := signToken(cfg.JWTSecret, user, "refresh", nil, nil, nil, cfg.RefreshExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("auth: sign refresh token: %w", err)
 	}
@@ -67,7 +68,7 @@ func RefreshTokenPair(ctx context.Context, cfg Config, store Store, refreshToken
 		groupNames[i] = g.Name
 	}
 
-	return GenerateTokenPair(cfg, user, permKeys, groupNames)
+	return GenerateTokenPair(cfg, user, permKeys, groupNames, nil)
 }
 
 // ValidateToken parses and validates a JWT token, returning the claims.
@@ -109,10 +110,21 @@ func ValidateToken(cfg Config, tokenStr string) (*Claims, error) {
 		}
 	}
 
+	// Extract any remaining keys as meta (custom app-level claims)
+	reserved := map[string]bool{"user_id": true, "email": true, "type": true, "iat": true, "exp": true, "permissions": true, "groups": true}
+	for k, v := range mapClaims {
+		if !reserved[k] {
+			if claims.Meta == nil {
+				claims.Meta = make(map[string]any)
+			}
+			claims.Meta[k] = v
+		}
+	}
+
 	return claims, nil
 }
 
-func signToken(secret string, user *User, tokenType string, permissions []string, groups []string, expiry time.Duration) (string, error) {
+func signToken(secret string, user *User, tokenType string, permissions []string, groups []string, meta map[string]any, expiry time.Duration) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
 		"email":   user.Email,
@@ -121,13 +133,16 @@ func signToken(secret string, user *User, tokenType string, permissions []string
 		"exp":     time.Now().Add(expiry).Unix(),
 	}
 
-	// Only embed permissions and groups in access tokens
+	// Only embed permissions, groups, and meta in access tokens
 	if tokenType == "access" {
 		if permissions != nil {
 			claims["permissions"] = permissions
 		}
 		if groups != nil {
 			claims["groups"] = groups
+		}
+		for k, v := range meta {
+			claims[k] = v
 		}
 	}
 
