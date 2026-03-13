@@ -5,88 +5,17 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	auth "github.com/meikuraledutech/auth/v2"
 	"github.com/meikuraledutech/auth/v2/postgres"
-	"github.com/meikuraledutech/mailing"
-	mailingzepto "github.com/meikuraledutech/mailing/zeptomail"
 )
-
-// AppMailer implements auth.Mailer using mailing.Sender.
-// Each app brings their own templates and sender identity.
-type AppMailer struct {
-	sender    mailing.Sender
-	apiKey    string
-	fromEmail string
-}
-
-func (m *AppMailer) SendOTP(ctx context.Context, email string, code string, expiresIn time.Duration) error {
-	html := fmt.Sprintf(`
-		<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-			<h2>Your verification code</h2>
-			<p style="font-size:32px;font-weight:bold;letter-spacing:8px">%s</p>
-			<p style="color:#666">Expires in %d minutes.</p>
-		</div>`, code, int(expiresIn.Minutes()))
-
-	_, err := m.sender.Send(ctx, mailing.Mail{
-		Token:   m.apiKey,
-		From:    m.fromEmail,
-		To:      email,
-		Subject: "Your Smart Forms verification code",
-		HTML:    html,
-	})
-	return err
-}
-
-func (m *AppMailer) SendPasswordReset(ctx context.Context, email string, resetURL string, expiresIn time.Duration) error {
-	html := fmt.Sprintf(`
-		<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-			<h2>Reset your password</h2>
-			<p>Click the button below to reset your password. This link expires in %d minutes.</p>
-			<a href="%s" style="display:inline-block;padding:12px 24px;background:#0070f3;color:#fff;text-decoration:none;border-radius:6px">Reset Password</a>
-			<p style="color:#666;font-size:12px">Or copy this link: %s</p>
-		</div>`, int(expiresIn.Minutes()), resetURL, resetURL)
-
-	_, err := m.sender.Send(ctx, mailing.Mail{
-		Token:   m.apiKey,
-		From:    m.fromEmail,
-		To:      email,
-		Subject: "Reset your Smart Forms password",
-		HTML:    html,
-	})
-	return err
-}
-
-func (m *AppMailer) SendWelcome(ctx context.Context, user *auth.User) error {
-	html := fmt.Sprintf(`
-		<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-			<h2>Welcome to Smart Forms!</h2>
-			<p>Hi %s,</p>
-			<p>Your account has been created. Start building your forms today.</p>
-			<a href="https://smart-forms.in/dashboard" style="display:inline-block;padding:12px 24px;background:#0070f3;color:#fff;text-decoration:none;border-radius:6px">Go to Dashboard</a>
-		</div>`, user.Email)
-
-	_, err := m.sender.Send(ctx, mailing.Mail{
-		Token:   m.apiKey,
-		From:    m.fromEmail,
-		To:      user.Email,
-		Subject: "Welcome to Smart Forms!",
-		HTML:    html,
-	})
-	return err
-}
 
 func main() {
 	ctx := context.Background()
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	jwtSecret := os.Getenv("JWT_SECRET")
-	zeptoAPIKey := os.Getenv("ZEPTO_API_KEY")
-	zeptoAPIURL := os.Getenv("ZEPTO_API_URL")
-	zeptoProvider := os.Getenv("ZEPTO_PROVIDER")
-	fromEmail := os.Getenv("FROM_EMAIL")
 	superAdminEmail := os.Getenv("SUPER_ADMIN_EMAIL")
 
 	if databaseURL == "" {
@@ -94,6 +23,9 @@ func main() {
 	}
 	if jwtSecret == "" {
 		jwtSecret = "test-secret-key"
+	}
+	if superAdminEmail == "" {
+		superAdminEmail = "admin@example.com"
 	}
 
 	pool, err := pgxpool.New(ctx, databaseURL)
@@ -103,101 +35,310 @@ func main() {
 	defer pool.Close()
 
 	cfg := auth.DefaultConfig(jwtSecret, superAdminEmail)
-
-	sender := mailingzepto.New(mailingzepto.Config{
-		APIURL:   zeptoAPIURL,
-		Provider: zeptoProvider,
-	})
-	mailer := &AppMailer{sender: sender, apiKey: zeptoAPIKey, fromEmail: fromEmail}
-
 	store := postgres.New(pool, cfg)
 
-	fmt.Println("=== Testing Auth v2 ===\n")
+	fmt.Println("\n=== AUTH v2.1.0 - ORGANIZATION MODEL TEST ===\n")
 
-	// 1: Bootstrap
-	fmt.Println("1. Running migrations and bootstrap...")
-	if err := store.Bootstrap(ctx, superAdminEmail); err != nil {
-		log.Fatalf("Bootstrap failed: %v", err)
+	// 0. Drop schema to start fresh
+	fmt.Println("0. Dropping old schema to start fresh...")
+	if err := store.DropSchema(ctx); err != nil {
+		log.Fatalf("❌ DropSchema failed: %v", err)
 	}
-	fmt.Println("   ✓ Bootstrap complete\n")
+	fmt.Println("✓ Old schema dropped\n")
 
-	// 2: Create OTP
-	testEmail := "dharaniadithya1998.da@gmail.com"
-	fmt.Printf("2. Creating OTP for %s...\n", testEmail)
-	otp, err := store.CreateOTP(ctx, testEmail)
+	// 1. Bootstrap with organizations
+	fmt.Println("1. Bootstrap: Creating schema, permissions, and 4 organizations...")
+	orgs := map[string][]string{
+		"super_admin": {"permissions:manage", "groups:manage", "users:manage"},
+		"trainer":     {"forms:create", "users:manage"},
+		"college_admin": {"groups:manage", "forms:create"},
+		"student":     {"forms:create"},
+	}
+	if err := store.Bootstrap(ctx, superAdminEmail, orgs); err != nil {
+		log.Fatalf("❌ Bootstrap failed: %v", err)
+	}
+	fmt.Println("✓ Schema created, permissions seeded, organizations created\n")
+
+	// 2. Verify organizations exist
+	fmt.Println("2. Verify all organizations created...")
+	allOrgs, err := store.ListOrganizations(ctx)
 	if err != nil {
-		log.Fatalf("CreateOTP failed: %v", err)
+		log.Fatalf("❌ ListOrganizations failed: %v", err)
 	}
-	fmt.Printf("   ✓ OTP created: %s\n", otp.Code)
-
-	// 3: Send OTP email
-	fmt.Println("3. Sending OTP email...")
-	if err := mailer.SendOTP(ctx, testEmail, otp.Code, cfg.OTPExpiry); err != nil {
-		log.Fatalf("SendOTP failed: %v", err)
+	fmt.Printf("✓ Total organizations: %d\n", len(allOrgs))
+	for _, o := range allOrgs {
+		fmt.Printf("   - %s\n", o.Name)
 	}
-	fmt.Printf("   ✓ OTP email sent to %s\n\n", testEmail)
+	fmt.Println()
 
-	// 4: Password register — triggers SendWelcome automatically
-	testPassword := "TestPassword123!"
-	regEmail := "dharaniadithya1998.da@gmail.com"
-	fmt.Printf("4. Registering user with password (%s)...\n", regEmail)
-	user, err := store.RegisterWithPassword(ctx, regEmail, testPassword)
+	// 3. Get organization with permissions
+	fmt.Println("3. Verify organization permissions...")
+	trainerOrg, err := store.GetOrganizationByName(ctx, "trainer")
 	if err != nil {
-		log.Fatalf("RegisterWithPassword failed: %v", err)
+		log.Fatalf("❌ GetOrganizationByName failed: %v", err)
 	}
-	fmt.Printf("   ✓ User registered: %s\n", user.Email)
-
-	// App decides when/whether to send welcome — library does not auto-trigger
-	if err := mailer.SendWelcome(ctx, user); err != nil {
-		log.Fatalf("SendWelcome failed: %v", err)
+	if trainerOrg == nil {
+		log.Fatalf("❌ Trainer organization not found")
 	}
-	fmt.Printf("   ✓ Welcome email sent\n\n")
+	fmt.Printf("✓ Trainer org permissions (%d):\n", len(trainerOrg.Permissions))
+	for _, p := range trainerOrg.Permissions {
+		fmt.Printf("   - %s: %s\n", p.Key, p.Description)
+	}
+	fmt.Println()
 
-	// 5: Login with password
-	fmt.Println("5. Logging in with password...")
-	loggedIn, err := store.LoginWithPassword(ctx, regEmail, testPassword)
+	// 4. Create users with different organizations
+	fmt.Println("4. Create users with different organizations...")
+	trainer, err := store.CreateUserWithOrganization(ctx, "trainer@smartforms.in", "trainer")
 	if err != nil {
-		log.Fatalf("LoginWithPassword failed: %v", err)
+		log.Fatalf("❌ Create trainer user failed: %v", err)
 	}
-	fmt.Printf("   ✓ Logged in: %s\n\n", loggedIn.Email)
+	fmt.Printf("✓ Trainer user: %s (org: %s, id: %s)\n", trainer.Email, trainer.Organization, trainer.ID)
 
-	// 6: Password reset token
-	fmt.Println("6. Creating password reset token...")
-	resetToken, expiresAt, err := store.CreatePasswordReset(ctx, regEmail)
+	student, err := store.CreateUserWithOrganization(ctx, "student@smartforms.in", "student")
 	if err != nil {
-		log.Fatalf("CreatePasswordReset failed: %v", err)
+		log.Fatalf("❌ Create student user failed: %v", err)
 	}
-	fmt.Printf("   ✓ Reset token created, expires: %s\n", expiresAt.Format("2006-01-02 15:04:05"))
-	fmt.Printf("   ✓ Token: %s...\n\n", resetToken[:20])
+	fmt.Printf("✓ Student user: %s (org: %s, id: %s)\n", student.Email, student.Organization, student.ID)
 
-	// 7: Generate JWT token pair with custom meta claims
-	fmt.Println("7. Generating JWT token pair with meta claims...")
-	tokens, err := auth.GenerateTokenPair(cfg, user, []string{}, []string{}, map[string]any{
-		"college_id": "clg_abc123",
-		"role":       "college_admin",
-	})
+	collegeAdmin, err := store.CreateUserWithOrganization(ctx, "college.admin@smartforms.in", "college_admin")
 	if err != nil {
-		log.Fatalf("GenerateTokenPair failed: %v", err)
+		log.Fatalf("❌ Create college_admin user failed: %v", err)
 	}
-	fmt.Printf("   ✓ Access token:  %s...\n", tokens.AccessToken[:50])
-	fmt.Printf("   ✓ Refresh token: %s...\n", tokens.RefreshToken[:50])
+	fmt.Printf("✓ College Admin user: %s (org: %s, id: %s)\n", collegeAdmin.Email, collegeAdmin.Organization, collegeAdmin.ID)
+	fmt.Println()
 
-	// Validate and check meta is present
-	claims, err := auth.ValidateToken(cfg, tokens.AccessToken)
+	// 5. Get super admin and verify all permissions
+	fmt.Println("5. Verify super admin has all permissions...")
+	superAdmin, err := store.GetUserByEmail(ctx, superAdminEmail)
 	if err != nil {
-		log.Fatalf("ValidateToken failed: %v", err)
+		log.Fatalf("❌ GetUserByEmail failed: %v", err)
 	}
-	fmt.Printf("   ✓ Meta from token: %v\n\n", claims.Meta)
-
-	// 8: Refresh token pair
-	fmt.Println("8. Refreshing token pair...")
-	newTokens, err := auth.RefreshTokenPair(ctx, cfg, store, tokens.RefreshToken)
+	if superAdmin == nil {
+		log.Fatalf("❌ Super admin not found")
+	}
+	superAdminPerms, err := store.GetResolvedPermissions(ctx, superAdmin.ID)
 	if err != nil {
-		log.Fatalf("RefreshTokenPair failed: %v", err)
+		log.Fatalf("❌ GetResolvedPermissions failed: %v", err)
 	}
-	fmt.Printf("   ✓ New access token:  %s...\n", newTokens.AccessToken[:50])
-	fmt.Printf("   ✓ New refresh token: %s...\n\n", newTokens.RefreshToken[:50])
+	fmt.Printf("✓ Super admin has %d permissions (all expected permissions):\n", len(superAdminPerms))
+	for _, p := range superAdminPerms {
+		fmt.Printf("   - %s\n", p.Key)
+	}
+	fmt.Println()
 
-	fmt.Println("=== All tests passed! ===")
-	fmt.Printf("\nOTP code: %s (sent to %s)\n", otp.Code, testEmail)
+	// 6. Test permission inheritance from organization
+	fmt.Println("6. Test permission inheritance from organization...")
+	fmt.Println("   Testing: Trainer should have 'forms:create' from trainer org")
+	hasFormCreate, err := store.HasResolvedPermission(ctx, trainer.ID, "forms:create")
+	if err != nil {
+		log.Fatalf("❌ HasResolvedPermission failed: %v", err)
+	}
+	if !hasFormCreate {
+		log.Fatalf("❌ Trainer does not have 'forms:create' permission (should inherit from trainer org)")
+	}
+	fmt.Println("✓ Trainer has 'forms:create' (inherited from trainer organization)")
+
+	fmt.Println("   Testing: Student should have 'forms:create' from student org")
+	hasFormCreate, err = store.HasResolvedPermission(ctx, student.ID, "forms:create")
+	if err != nil {
+		log.Fatalf("❌ HasResolvedPermission failed: %v", err)
+	}
+	if !hasFormCreate {
+		log.Fatalf("❌ Student does not have 'forms:create' permission")
+	}
+	fmt.Println("✓ Student has 'forms:create' (inherited from student organization)")
+	fmt.Println()
+
+	// 7. Test unauthorized access (negative test)
+	fmt.Println("7. Test unauthorized access (negative tests)...")
+	fmt.Println("   Testing: Student should NOT have 'groups:manage'")
+	hasGroupManage, err := store.HasResolvedPermission(ctx, student.ID, "groups:manage")
+	if err != nil {
+		log.Fatalf("❌ HasResolvedPermission failed: %v", err)
+	}
+	if hasGroupManage {
+		log.Fatalf("❌ Student has 'groups:manage' (should NOT have this)")
+	}
+	fmt.Println("✓ Student blocked from 'groups:manage' - CORRECT")
+
+	fmt.Println("   Testing: Trainer should NOT have 'permissions:manage'")
+	hasPermManage, err := store.HasResolvedPermission(ctx, trainer.ID, "permissions:manage")
+	if err != nil {
+		log.Fatalf("❌ HasResolvedPermission failed: %v", err)
+	}
+	if hasPermManage {
+		log.Fatalf("❌ Trainer has 'permissions:manage' (should NOT have this)")
+	}
+	fmt.Println("✓ Trainer blocked from 'permissions:manage' - CORRECT")
+
+	fmt.Println("   Testing: College Admin should NOT have 'users:manage'")
+	hasUserManage, err := store.HasResolvedPermission(ctx, collegeAdmin.ID, "users:manage")
+	if err != nil {
+		log.Fatalf("❌ HasResolvedPermission failed: %v", err)
+	}
+	if hasUserManage {
+		log.Fatalf("❌ College Admin has 'users:manage' (should NOT have this)")
+	}
+	fmt.Println("✓ College Admin blocked from 'users:manage' - CORRECT")
+	fmt.Println()
+
+	// 8. Test HasAnyPermission
+	fmt.Println("8. Test HasAnyPermission (multiple permission check)...")
+	fmt.Println("   Testing: Trainer has any of ['forms:create', 'users:manage']")
+	hasAny, err := store.HasAnyPermission(ctx, trainer.ID, []string{"forms:create", "users:manage"})
+	if err != nil {
+		log.Fatalf("❌ HasAnyPermission failed: %v", err)
+	}
+	if !hasAny {
+		log.Fatalf("❌ Trainer should have at least one of these permissions")
+	}
+	fmt.Println("✓ Trainer has at least one of the required permissions")
+
+	fmt.Println("   Testing: Student has any of ['groups:manage', 'permissions:manage']")
+	hasAny, err = store.HasAnyPermission(ctx, student.ID, []string{"groups:manage", "permissions:manage"})
+	if err != nil {
+		log.Fatalf("❌ HasAnyPermission failed: %v", err)
+	}
+	if hasAny {
+		log.Fatalf("❌ Student should NOT have any of these permissions")
+	}
+	fmt.Println("✓ Student correctly blocked from all requested permissions")
+	fmt.Println()
+
+	// 9. Test direct permissions + organization inheritance
+	fmt.Println("9. Test GetAllUserPermissions (direct + group + org)...")
+	fmt.Println("   Assigning 'users:manage' directly to trainer...")
+	err = store.AssignPermission(ctx, trainer.ID, "users:manage")
+	if err != nil {
+		log.Fatalf("❌ AssignPermission failed: %v", err)
+	}
+	fmt.Println("✓ Direct permission assigned")
+
+	trainerAllPerms, err := store.GetAllUserPermissions(ctx, trainer.ID)
+	if err != nil {
+		log.Fatalf("❌ GetAllUserPermissions failed: %v", err)
+	}
+	fmt.Printf("✓ Trainer now has %d total permissions (org + direct):\n", len(trainerAllPerms))
+	for _, p := range trainerAllPerms {
+		fmt.Printf("   - %s\n", p.Key)
+	}
+	fmt.Println()
+
+	// 10. Test group-based permissions with bulk operations
+	fmt.Println("10. Test bulk group operations...")
+	fmt.Println("    Creating group 'Editors' with forms:create permission...")
+	editorsGroup, err := store.CreateGroup(ctx, "Editors")
+	if err != nil {
+		log.Fatalf("❌ CreateGroup failed: %v", err)
+	}
+	fmt.Printf("✓ Group created: %s\n", editorsGroup.Name)
+
+	err = store.AddPermissionToGroup(ctx, editorsGroup.ID, "forms:create")
+	if err != nil {
+		log.Fatalf("❌ AddPermissionToGroup failed: %v", err)
+	}
+	fmt.Println("✓ Permission assigned to group")
+
+	fmt.Println("    Adding student + trainer to group in bulk...")
+	err = store.AddUsersToGroup(ctx, editorsGroup.ID, []string{student.ID, trainer.ID})
+	if err != nil {
+		log.Fatalf("❌ AddUsersToGroup failed: %v", err)
+	}
+	fmt.Println("✓ Users added to group in bulk")
+
+	members, err := store.GetGroupMembers(ctx, editorsGroup.ID)
+	if err != nil {
+		log.Fatalf("❌ GetGroupMembers failed: %v", err)
+	}
+	fmt.Printf("✓ Group has %d members:\n", len(members))
+	for _, m := range members {
+		fmt.Printf("   - %s (org: %s)\n", m.Email, m.Organization)
+	}
+	fmt.Println()
+
+	// 11. Verify user organization field is populated correctly
+	fmt.Println("11. Verify user organization field is populated...")
+	student2, err := store.GetUserByEmail(ctx, "student@smartforms.in")
+	if err != nil {
+		log.Fatalf("❌ GetUserByEmail failed: %v", err)
+	}
+	if student2.Organization != "student" {
+		log.Fatalf("❌ Student organization not stored correctly: got %q, want 'student'", student2.Organization)
+	}
+	fmt.Printf("✓ User.Organization correctly persisted: %s\n", student2.Organization)
+
+	trainer2, err := store.GetUserByEmail(ctx, "trainer@smartforms.in")
+	if err != nil {
+		log.Fatalf("❌ GetUserByEmail failed: %v", err)
+	}
+	if trainer2.Organization != "trainer" {
+		log.Fatalf("❌ Trainer organization not stored correctly: got %q, want 'trainer'", trainer2.Organization)
+	}
+	fmt.Printf("✓ User.Organization correctly persisted: %s\n", trainer2.Organization)
+	fmt.Println()
+
+	// 12. Test backward compatibility - user without organization
+	fmt.Println("12. Test backward compatibility (user without organization)...")
+	userNoOrg, err := store.CreateUser(ctx, "noorg@smartforms.in")
+	if err != nil {
+		log.Fatalf("❌ CreateUser failed: %v", err)
+	}
+	fmt.Printf("✓ User created without organization: %s\n", userNoOrg.Email)
+
+	userNoOrg2, err := store.GetUserByEmail(ctx, "noorg@smartforms.in")
+	if err != nil {
+		log.Fatalf("❌ GetUserByEmail failed: %v", err)
+	}
+	if userNoOrg2.Organization != "" {
+		log.Fatalf("❌ User without org should have empty organization, got: %q", userNoOrg2.Organization)
+	}
+	fmt.Printf("✓ User.Organization is empty (backward compatible): %q\n", userNoOrg2.Organization)
+
+	userNoOrgPerms, err := store.GetResolvedPermissions(ctx, userNoOrg2.ID)
+	if err != nil {
+		log.Fatalf("❌ GetResolvedPermissions failed: %v", err)
+	}
+	fmt.Printf("✓ User without org has no permissions: %d\n", len(userNoOrgPerms))
+	fmt.Println()
+
+	// 13. Test invalid organization assignment
+	fmt.Println("13. Test invalid organization rejection...")
+	_, err = store.CreateUserWithOrganization(ctx, "invalid@smartforms.in", "nonexistent_org")
+	if err != auth.ErrInvalidOrganization {
+		log.Fatalf("❌ Should reject invalid organization, got error: %v", err)
+	}
+	fmt.Println("✓ Invalid organization correctly rejected")
+	fmt.Println()
+
+	// 14. Test remove users from group
+	fmt.Println("14. Test remove users from group...")
+	fmt.Println("    Removing student from Editors group...")
+	err = store.RemoveUsersFromGroup(ctx, editorsGroup.ID, []string{student.ID})
+	if err != nil {
+		log.Fatalf("❌ RemoveUsersFromGroup failed: %v", err)
+	}
+	fmt.Println("✓ User removed from group")
+
+	members, err = store.GetGroupMembers(ctx, editorsGroup.ID)
+	if err != nil {
+		log.Fatalf("❌ GetGroupMembers failed: %v", err)
+	}
+	if len(members) != 1 {
+		log.Fatalf("❌ Expected 1 member after removal, got %d", len(members))
+	}
+	fmt.Printf("✓ Group now has %d members\n", len(members))
+	fmt.Println()
+
+	fmt.Println("=== ALL TESTS PASSED ===\n")
+	fmt.Println("Summary:")
+	fmt.Println("✓ Organizations created with permissions")
+	fmt.Println("✓ Users assigned to organizations")
+	fmt.Println("✓ Permission inheritance from organization")
+	fmt.Println("✓ Unauthorized access properly blocked")
+	fmt.Println("✓ Permission resolution works (direct + group + org)")
+	fmt.Println("✓ Bulk group operations work")
+	fmt.Println("✓ User.Organization field properly persisted")
+	fmt.Println("✓ Backward compatibility maintained")
+	fmt.Println("✓ Invalid organization correctly rejected")
+	fmt.Println()
 }

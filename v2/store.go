@@ -20,6 +20,10 @@ var (
 	ErrEmailAlreadyRegistered = errors.New("auth: email is already registered")
 	ErrResetTokenInvalid    = errors.New("auth: invalid or expired password reset token")
 	ErrResetTokenUsed       = errors.New("auth: password reset token has already been used")
+	ErrOrganizationNotFound  = errors.New("auth: organization not found")
+	ErrOrganizationExists    = errors.New("auth: organization already exists")
+	ErrInvalidOrganization   = errors.New("auth: invalid organization")
+	ErrGroupMembershipFailed = errors.New("auth: failed to update group membership")
 )
 
 // Store defines the contract for persisting and retrieving auth data.
@@ -63,12 +67,34 @@ type Store interface {
 	RemoveUserFromGroup(ctx context.Context, userID string, groupID string) error
 	GetUserGroups(ctx context.Context, userID string) ([]Group, error)
 
-	// Resolved Permissions (direct + from groups)
+	// Resolved Permissions (direct + from groups + from organizations)
 	GetResolvedPermissions(ctx context.Context, userID string) ([]Permission, error)
 	HasResolvedPermission(ctx context.Context, userID string, permissionKey string) (bool, error)
 
+	// Organizations
+	CreateOrganizationWithPermissions(ctx context.Context, name string, permissionKeys []string) (*Organization, error)
+	AssignPermissionsToOrganization(ctx context.Context, orgID string, permissionKeys []string) error
+	RemovePermissionsFromOrganization(ctx context.Context, orgID string, permissionKeys []string) error
+	GetOrganizationPermissions(ctx context.Context, orgID string) ([]Permission, error)
+	ListOrganizations(ctx context.Context) ([]Organization, error)
+	GetOrganization(ctx context.Context, id string) (*Organization, error)
+	GetOrganizationByName(ctx context.Context, name string) (*Organization, error)
+
+	// User-Organization
+	CreateUserWithOrganization(ctx context.Context, email string, organization string) (*User, error)
+	GetUserOrganization(ctx context.Context, userID string) (string, error)
+
+	// Enhanced Permission Resolution
+	GetAllUserPermissions(ctx context.Context, userID string) ([]Permission, error)
+	HasAnyPermission(ctx context.Context, userID string, permissionKeys []string) (bool, error)
+
+	// Bulk Group Operations
+	AddUsersToGroup(ctx context.Context, groupID string, userIDs []string) error
+	RemoveUsersFromGroup(ctx context.Context, groupID string, userIDs []string) error
+	GetGroupMembers(ctx context.Context, groupID string) ([]User, error)
+
 	// Bootstrap
-	Bootstrap(ctx context.Context, superAdminEmail string) error
+	Bootstrap(ctx context.Context, superAdminEmail string, organizations ...map[string][]string) error
 
 	// Password Auth
 	RegisterWithPassword(ctx context.Context, email string, plainPassword string) (*User, error)

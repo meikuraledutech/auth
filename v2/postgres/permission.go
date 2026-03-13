@@ -159,7 +159,7 @@ func (s *PGStore) HasPermission(ctx context.Context, userID string, permissionKe
 	return exists, nil
 }
 
-// GetResolvedPermissions returns all permissions for a user (direct + from groups), deduplicated.
+// GetResolvedPermissions returns all permissions for a user (direct + from groups + from organizations), deduplicated.
 func (s *PGStore) GetResolvedPermissions(ctx context.Context, userID string) ([]auth.Permission, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT DISTINCT p.id, p.key, p.description, p.created_at
@@ -170,6 +170,11 @@ func (s *PGStore) GetResolvedPermissions(ctx context.Context, userID string) ([]
 			 SELECT gp.permission_id FROM auth_group_permissions gp
 			 JOIN auth_user_groups ug ON ug.group_id = gp.group_id
 			 WHERE ug.user_id = $1
+			 UNION
+			 SELECT op.permission_id FROM auth_organization_permissions op
+			 JOIN auth_organizations o ON o.id = op.organization_id
+			 JOIN auth_users u ON u.organization = o.name
+			 WHERE u.id = $1
 		 )
 		 ORDER BY p.key`, userID,
 	)
@@ -189,7 +194,7 @@ func (s *PGStore) GetResolvedPermissions(ctx context.Context, userID string) ([]
 	return perms, rows.Err()
 }
 
-// HasResolvedPermission checks if a user has a permission (direct or via group).
+// HasResolvedPermission checks if a user has a permission (direct, via group, or via organization).
 func (s *PGStore) HasResolvedPermission(ctx context.Context, userID string, permissionKey string) (bool, error) {
 	var exists bool
 	err := s.db.QueryRow(ctx,
@@ -201,6 +206,11 @@ func (s *PGStore) HasResolvedPermission(ctx context.Context, userID string, perm
 				SELECT gp.permission_id FROM auth_group_permissions gp
 				JOIN auth_user_groups ug ON ug.group_id = gp.group_id
 				WHERE ug.user_id = $1
+				UNION
+				SELECT op.permission_id FROM auth_organization_permissions op
+				JOIN auth_organizations o ON o.id = op.organization_id
+				JOIN auth_users u ON u.organization = o.name
+				WHERE u.id = $1
 			)
 		)`, userID, permissionKey,
 	).Scan(&exists)

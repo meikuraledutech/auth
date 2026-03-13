@@ -14,8 +14,10 @@ func (s *PGStore) DropSchema(ctx context.Context) error {
 		DROP TABLE IF EXISTS auth_migrations CASCADE;
 		DROP TABLE IF EXISTS auth_user_groups CASCADE;
 		DROP TABLE IF EXISTS auth_group_permissions CASCADE;
+		DROP TABLE IF EXISTS auth_organization_permissions CASCADE;
 		DROP TABLE IF EXISTS auth_user_permissions CASCADE;
 		DROP TABLE IF EXISTS auth_groups CASCADE;
+		DROP TABLE IF EXISTS auth_organizations CASCADE;
 		DROP TABLE IF EXISTS auth_permissions CASCADE;
 		DROP TABLE IF EXISTS auth_otps CASCADE;
 		DROP TABLE IF EXISTS auth_users CASCADE;

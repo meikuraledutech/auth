@@ -8,9 +8,10 @@ import (
 
 // User represents an authenticated user.
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           string    `json:"id"`
+	Email        string    `json:"email"`
+	Organization string    `json:"organization,omitempty"` // e.g. "trainer", "student"
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // OTP represents a one-time password sent to a user's email.
@@ -61,6 +62,14 @@ type Permission struct {
 type Group struct {
 	ID          string       `json:"id"`
 	Name        string       `json:"name"` // e.g. "Editor"
+	Permissions []Permission `json:"permissions,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+}
+
+// Organization represents an organizational role with base permissions.
+type Organization struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`        // e.g. "trainer", "student"
 	Permissions []Permission `json:"permissions,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 }

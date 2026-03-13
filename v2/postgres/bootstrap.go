@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+
+	"github.com/meikuraledutech/auth/v2"
 )
 
 // Default permissions seeded on bootstrap.
@@ -18,7 +20,8 @@ var defaultPermissions = []struct {
 
 // Bootstrap creates the schema, seeds default permissions, and ensures the super admin
 // user exists with all permissions. Safe to call on every server start (idempotent).
-func (s *PGStore) Bootstrap(ctx context.Context, superAdminEmail string) error {
+// organizations is optional variadic map of organization name -> permission keys.
+func (s *PGStore) Bootstrap(ctx context.Context, superAdminEmail string, organizations ...map[string][]string) error {
 	// 1. Run migrations if AutoMigrate is enabled.
 	if s.cfg.AutoMigrate {
 		if err := s.Migrate(ctx); err != nil {
@@ -41,13 +44,50 @@ func (s *PGStore) Bootstrap(ctx context.Context, superAdminEmail string) error {
 	}
 	log.Println("auth: default permissions seeded")
 
-	// 3. Ensure super admin user exists.
-	user, err := s.CreateUser(ctx, superAdminEmail)
+	// 2b. Create additional permissions needed by organizations.
+	if len(organizations) > 0 {
+		permissionKeysNeeded := make(map[string]bool)
+		for _, permKeys := range organizations[0] {
+			for _, key := range permKeys {
+				permissionKeysNeeded[key] = true
+			}
+		}
+		for key := range permissionKeysNeeded {
+			if _, err := s.CreatePermission(ctx, key, "Organization permission"); err != nil {
+				return fmt.Errorf("auth: bootstrap permission %s: %w", key, err)
+			}
+		}
+	}
+
+	// 3. Seed organizations if provided.
+	if len(organizations) > 0 {
+		for orgName, permKeys := range organizations[0] {
+			if _, err := s.CreateOrganizationWithPermissions(ctx, orgName, permKeys); err != nil {
+				return fmt.Errorf("auth: bootstrap organization %s: %w", orgName, err)
+			}
+		}
+		log.Println("auth: organizations seeded")
+	}
+
+	// 4. Ensure super admin user exists.
+	// Assign to "super_admin" organization if it exists, otherwise create without org.
+	var user *auth.User
+	var err error
+	if len(organizations) > 0 {
+		orgMap := organizations[0]
+		if _, ok := orgMap["super_admin"]; ok {
+			user, err = s.CreateUserWithOrganization(ctx, superAdminEmail, "super_admin")
+		} else {
+			user, err = s.CreateUser(ctx, superAdminEmail)
+		}
+	} else {
+		user, err = s.CreateUser(ctx, superAdminEmail)
+	}
 	if err != nil {
 		return fmt.Errorf("auth: bootstrap super admin: %w", err)
 	}
 
-	// 4. Assign all permissions to super admin.
+	// 5. Assign all permissions to super admin.
 	allPerms, err := s.ListPermissions(ctx)
 	if err != nil {
 		return fmt.Errorf("auth: bootstrap list permissions: %w", err)
