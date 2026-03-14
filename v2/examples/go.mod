@@ -4,11 +4,9 @@ go 1.25.0
 
 require (
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/meikuraledutech/auth/v2 v2.0.5
+	github.com/meikuraledutech/auth/v2 v2.1.0
 	github.com/meikuraledutech/mailing v0.0.1
 )
-
-replace github.com/meikuraledutech/auth/v2 => ..
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
