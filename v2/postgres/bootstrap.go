@@ -19,9 +19,10 @@ var defaultPermissions = []struct {
 }
 
 // Bootstrap creates the schema, seeds default permissions, and ensures the super admin
-// user exists with all permissions. Safe to call on every server start (idempotent).
+// user exists with all permissions and a password. Safe to call on every server start (idempotent).
 // organizations is optional variadic map of organization name -> permission keys.
-func (s *PGStore) Bootstrap(ctx context.Context, superAdminEmail string, organizations ...map[string][]string) error {
+// superAdminPassword is optional — if provided, sets the super admin's password; if empty, no password is set.
+func (s *PGStore) Bootstrap(ctx context.Context, superAdminEmail string, superAdminPassword string, organizations ...map[string][]string) error {
 	// 1. Run migrations if AutoMigrate is enabled.
 	if s.cfg.AutoMigrate {
 		if err := s.Migrate(ctx); err != nil {
@@ -85,6 +86,14 @@ func (s *PGStore) Bootstrap(ctx context.Context, superAdminEmail string, organiz
 	}
 	if err != nil {
 		return fmt.Errorf("auth: bootstrap super admin: %w", err)
+	}
+
+	// 4b. Set super admin password if provided.
+	if superAdminPassword != "" {
+		if err := s.SetPassword(ctx, user.ID, superAdminPassword); err != nil {
+			return fmt.Errorf("auth: bootstrap set super admin password: %w", err)
+		}
+		log.Println("auth: super admin password set")
 	}
 
 	// 5. Assign all permissions to super admin.

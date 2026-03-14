@@ -1,14 +1,11 @@
-module example
+module login_test
 
 go 1.25.0
 
 require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/meikuraledutech/auth/v2 v2.1.0
-	github.com/meikuraledutech/mailing v0.0.1
 )
-
-replace github.com/meikuraledutech/auth/v2 => ../
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
@@ -20,3 +17,5 @@ require (
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )
+
+replace github.com/meikuraledutech/auth/v2 => ../../

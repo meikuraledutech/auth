@@ -17,6 +17,7 @@ func main() {
 	databaseURL := os.Getenv("DATABASE_URL")
 	jwtSecret := os.Getenv("JWT_SECRET")
 	superAdminEmail := os.Getenv("SUPER_ADMIN_EMAIL")
+	superAdminPassword := os.Getenv("SUPER_ADMIN_PASSWORD")
 
 	if databaseURL == "" {
 		log.Fatalf("DATABASE_URL not set")
@@ -26,6 +27,9 @@ func main() {
 	}
 	if superAdminEmail == "" {
 		superAdminEmail = "admin@example.com"
+	}
+	if superAdminPassword == "" {
+		superAdminPassword = "AdminPassword@123"
 	}
 
 	pool, err := pgxpool.New(ctx, databaseURL)
@@ -49,12 +53,12 @@ func main() {
 	// 1. Bootstrap with organizations
 	fmt.Println("1. Bootstrap: Creating schema, permissions, and 4 organizations...")
 	orgs := map[string][]string{
-		"super_admin": {"permissions:manage", "groups:manage", "users:manage"},
-		"trainer":     {"forms:create", "users:manage"},
+		"super_admin":   {"permissions:manage", "groups:manage", "users:manage"},
+		"trainer":       {"forms:create", "users:manage"},
 		"college_admin": {"groups:manage", "forms:create"},
-		"student":     {"forms:create"},
+		"student":       {"forms:create"},
 	}
-	if err := store.Bootstrap(ctx, superAdminEmail, orgs); err != nil {
+	if err := store.Bootstrap(ctx, superAdminEmail, superAdminPassword, map[string][]string(orgs)); err != nil {
 		log.Fatalf("❌ Bootstrap failed: %v", err)
 	}
 	fmt.Println("✓ Schema created, permissions seeded, organizations created\n")

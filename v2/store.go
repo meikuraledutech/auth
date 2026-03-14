@@ -94,7 +94,7 @@ type Store interface {
 	GetGroupMembers(ctx context.Context, groupID string) ([]User, error)
 
 	// Bootstrap
-	Bootstrap(ctx context.Context, superAdminEmail string, organizations ...map[string][]string) error
+	Bootstrap(ctx context.Context, superAdminEmail string, superAdminPassword string, organizations ...map[string][]string) error
 
 	// Password Auth
 	RegisterWithPassword(ctx context.Context, email string, plainPassword string) (*User, error)
